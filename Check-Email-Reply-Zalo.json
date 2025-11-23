@@ -1,0 +1,507 @@
+{
+  "name": "Check-Email-Reply-Zalo_3",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1600,
+        -80
+      ],
+      "id": "01a2636c-8ff3-455b-88df-6b9b0543f389",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Danh sách email:\n{{ JSON.stringify($json.data) }}\n\n\nHãy phân tích và:\n1. Lọc ra những email thực sự quan trọng (công việc, deadline, cuộc họp, sự kiện, yêu cầu khẩn cấp)\n2. Tóm tắt ngắn gọn nội dung của từng email quan trọng\n3. Xác định email nào có chứa thông tin lịch hẹn (ngày, giờ, địa điểm)\n\nTrả về kết quả dưới dạng JSON với format:\n{\n  \"important\": true/false,\n  \"summary\": \"tóm tắt ngắn gọn\",\n  \"hasCalendar\": true/false,\n  \"sender\": \"email người gửi\",\n  \"subject\": \"tiêu đề email\"\n} ",
+        "options": {
+          "systemMessage": "Bạn là 1 AI thông minh chuyên phân tích và lọc email quan trọng. Hãy giúp tôi:\n1. Lọc ra các email thực sự quan trọng (công việc, deadline, cuộc họp, sự kiện)\n2. Tóm tắt ngắn gọn nội dung email\n3. Phát hiện email có chứa thông tin lịch hẹn (ngày, giờ, địa điểm)\n\nTrả về kết quả dưới dạng JSON rõ ràng và chính xác."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -784,
+        -96
+      ],
+      "id": "dc593029-daf2-411b-8d21-3229e51cf948",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -864,
+        128
+      ],
+      "id": "18dacf6a-1048-490c-8e97-9eb87790a5c3",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "EmqFMHBf3PCDl8oU",
+          "name": "OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-calendar-check",
+              "leftValue": "={{ $json.output.hasCalendar.toBoolean()}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "important-check",
+              "leftValue": "={{ $json.output.important.toBoolean()}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        16,
+        -96
+      ],
+      "id": "eda5d697-fb01-4a2a-aca8-9671e1dab0cd",
+      "name": "1. Email có lịch và quan trọng?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "event-hour-check",
+              "leftValue": "={{ parseInt($json.output.eventTime.split(':')[0] || 0) }}",
+              "rightValue": 8,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        -96
+      ],
+      "id": "5d79f878-0abc-47bf-965b-6e86b844783a",
+      "name": "2. Giờ sự kiện sau 8:00 sáng?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "keep-original-output",
+              "name": "output",
+              "value": "={{ $json.output }}",
+              "type": "object"
+            },
+            {
+              "id": "format-event-time",
+              "name": "eventDateTime",
+              "value": "={{ $json.output && $json.output.eventTime ? $now.set({ hour: parseInt($json.output.eventTime.split(':')[0] || 0), minute: parseInt($json.output.eventTime.split(':')[1] || 0), second: 0, millisecond: 0 }) : $now }}",
+              "type": "date"
+            },
+            {
+              "id": "format-current-time",
+              "name": "currentDateTime",
+              "value": "={{ $now }}",
+              "type": "date"
+            },
+            {
+              "id": "format-event-time-readable",
+              "name": "eventTimeReadable",
+              "value": "={{ $json.output && $json.output.eventTime ? $now.set({ hour: parseInt($json.output.eventTime.split(':')[0] || 0), minute: parseInt($json.output.eventTime.split(':')[1] || 0), second: 0, millisecond: 0 }).toFormat('yyyy-MM-dd HH:mm:ss') : 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "format-current-time-readable",
+              "name": "currentTimeReadable",
+              "value": "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        368,
+        -96
+      ],
+      "id": "27afe67b-0f41-4b9a-869d-632ba9fbabdf",
+      "name": "Format Date để so sánh"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "event-future-check",
+              "leftValue": "={{ $json.eventDateTime }}",
+              "rightValue": "={{ $json.currentDateTime }}",
+              "operator": {
+                "type": "dateTime",
+                "operation": "after"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        -96
+      ],
+      "id": "6b81e066-1a56-4c93-b2b3-2cb7750cedd4",
+      "name": "3. Giờ sự kiện trong tương lai?"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        -1344,
+        -80
+      ],
+      "id": "aa7b6c80-865f-45d6-a486-0217aab79c36",
+      "name": "Get many messages",
+      "webhookId": "154c0dc2-bad8-44a1-acf4-ecd4ea752e58"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        -80
+      ],
+      "id": "2eeec925-b8ec-40e6-b6d1-69a350a66fcd",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.output }}",
+        "attributes": {
+          "attributes": [
+            {
+              "name": "important",
+              "description": "Email có quan trọng không (true/false)"
+            },
+            {
+              "name": "summary",
+              "description": "Tóm tắt ngắn gọn nội dung email"
+            },
+            {
+              "name": "hasCalendar",
+              "description": "Email có chứa thông tin lịch hẹn không (true/false)"
+            },
+            {
+              "name": "sender",
+              "description": "Email người gửi"
+            },
+            {
+              "name": "subject",
+              "description": "Tiêu đề email"
+            },
+            {
+              "name": "eventTitle",
+              "description": "Tiêu đề sự kiện nếu có lịch"
+            },
+            {
+              "name": "eventTime",
+              "description": "Giờ sự kiện (format: HH:mm)"
+            },
+            {
+              "name": "eventLocation",
+              "description": "Địa điểm sự kiện nếu có"
+            },
+            {
+              "name": "eventDescription",
+              "description": "Mô tả chi tiết sự kiện"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        -96
+      ],
+      "id": "fe83935a-ae4e-436c-8ca9-ec246bf77fd8",
+      "name": "Information Extractor"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -400,
+        144
+      ],
+      "id": "9f7fc53a-3191-46cf-9774-6a9bae72e56c",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "EmqFMHBf3PCDl8oU",
+          "name": "OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "nguyenvannhuan90123@gmail.com",
+          "mode": "list",
+          "cachedResultName": "nguyenvannhuan90123@gmail.com"
+        },
+        "start": "={{ $json.output && $json.output.eventTime ? $now.set({ hour: parseInt($json.output.eventTime.split(':')[0] || 0), minute: parseInt($json.output.eventTime.split(':')[1] || 0), second: 0, millisecond: 0 }) : $now }}",
+        "end": "={{ $json.output && $json.output.eventTime ? $now.set({ hour: parseInt($json.output.eventTime.split(':')[0] || 0), minute: parseInt($json.output.eventTime.split(':')[1] || 0), second: 0, millisecond: 0 }).plus({ hours: 2 }) : $now.plus({ hours: 2 }) }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "description": "={{ $json.output.summary }}",
+          "summary": "={{ $json.output.eventTitle }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        688,
+        -112
+      ],
+      "id": "c34fbbb5-af13-4287-a388-fe1ea8529f09",
+      "name": "Create an event1"
+    },
+    {
+      "parameters": {
+        "content": "## Trigger Email Workflow",
+        "height": 640,
+        "width": 2704,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1776,
+        -176
+      ],
+      "id": "47c4e648-8a66-4716-96d4-463f612ca7c3",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get many messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many messages": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "1. Email có lịch và quan trọng?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Email có lịch và quan trọng?": {
+      "main": [
+        [
+          {
+            "node": "2. Giờ sự kiện sau 8:00 sáng?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Giờ sự kiện sau 8:00 sáng?": {
+      "main": [
+        [
+          {
+            "node": "Format Date để so sánh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Date để so sánh": {
+      "main": [
+        [
+          {
+            "node": "3. Giờ sự kiện trong tương lai?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Giờ sự kiện trong tương lai?": {
+      "main": [
+        [
+          {
+            "node": "Create an event1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fe01c292-14cc-4305-be70-446b01d51f8a",
+  "meta": {
+    "instanceId": "8ae9064574590f4bef62fe6c8cafaae52a5a90dd40cb184103af1049753a2d5d"
+  },
+  "id": "OV9maNglHheEk1FB",
+  "tags": []
+}
